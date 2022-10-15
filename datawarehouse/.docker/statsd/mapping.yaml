@@ -1,0 +1,44 @@
+mappings:
+#REFERO
+  - match: "refero.redirect.*.*"
+    name: "svcRefero_redirect"
+    labels:
+      kind: "redirect"
+      status: "$1"
+      source: "$2"
+  - match: "refero.firehose.*.*"
+    name: "svcRefero_firehose"
+    labels:
+      status: "$1"
+      source: "$2"
+#FEED_SERVICE
+  - match: "feedsService.*.*.*"
+    name: "svcFeedsService_${1}_${2}"
+    labels:
+      networkName: "$3"
+  - match: "feedsService.feeds.*.*"
+    name: "svcFeedsService_feeds_${1}"
+    labels:
+      networkName: "$2"
+  - match: "feedsService.shops.*"
+    name: "svcFeedsService_shops_${1}"
+  - match: "feedsService.loaderDuration.*"
+    name: "svcFeedsService_loaderDuration"
+    labels:
+      networkName: "$1"
+  - match: "feedsService.loaderErrorCount.*"
+    name: "svcFeedsService_loaderErrorCount"
+    labels:
+      networkName: "$1"
+#PRODUCT
+  - match: "product.import.*"
+    name: "svcProduct_import"
+    labels:
+      kind: "import"
+      status: "$1"
+  #GOOGLE SERVICE
+  - match: "googleService.conversions.uploadStatus.*"
+    name: "svcGoogleService_conversions"
+    labels:
+      kind: "uploadStatus"
+      status: "$1"

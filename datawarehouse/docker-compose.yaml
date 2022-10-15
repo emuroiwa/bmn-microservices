@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  bmn-rabbitmq:
+    image: "rabbitmq:3.8.22-management-alpine"
+    environment:
+      RABBITMQ_DEFAULT_USER: "rabbitmq"
+      RABBITMQ_DEFAULT_PASS: "secret"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:
+      - "127.0.0.160:15673:15672"
+      - "127.0.0.160:5673:5672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - .docker/rabbitmq/rabbit_enabled_plugins:/etc/rabbitmq/enabled_plugins
+      - .docker/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    networks:
+      - bmn-ms-network
+
+  bmn-memcached:
+    image: memcached:latest
+    ports:
+      - "127.0.0.160:11212:11211"
+    networks:
+      - bmn-ms-network
+
+  bmn-statsd-exporter:
+    image: prom/statsd-exporter
+    command: "--statsd.mapping-config=/tmp/mapping.yaml"
+    ports:
+      - "127.0.0.150:9102:9102"
+      - "127.0.0.150:9125:9125/udp"
+    volumes:
+      - "./.docker/statsd/mapping.yaml:/tmp/mapping.yaml"
+    networks:
+      - bmn-ms-network   
+
+  bmn-kibana:
+    image: amazon/opendistro-for-elasticsearch-kibana:1.12.0
+    ports:
+      - "127.0.0.160:5601:5601"
+    expose:
+      - "5601"
+    environment:
+      ELASTICSEARCH_URL: https://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: https://elasticsearch:9200
+    networks:
+      - bmn-ms-network
+
+  bmn-elasticsearch:
+    image: amazon/opendistro-for-elasticsearch:1.12.0
+    restart: unless-stopped
+    environment:
+      - ES_HEAP_SIZE=1g
+      - http.port=9200
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - http.cors.enabled=true
+      - http.cors.allow-origin=http://127.0.0.160:8080
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - persist-elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - '127.0.0.160:9200:9200'
+    networks:
+      - bmn-ms-network
+
+  bmn-grafana:
+    image: grafana/grafana:7.4.3
+    ports:
+      - "127.0.0.160:3000:3000"
+    env_file:
+      - '.docker/grafana/.env.grafana'
+    user: "472"
+    volumes:
+      - persist-grafana:/var/lib/grafana
+      - ./.docker/grafana/conf:/etc/grafana/
+    networks:
+      - bmn-ms-network
+
+  bmn-prometheus:
+    image: quay.io/prometheus/prometheus:v2.26.0
+    volumes:
+      - ./.docker/prometheus/:/etc/prometheus/
+      - persist-prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - '127.0.0.160:9090:9090'
+    networks:
+      - bmn-ms-network
+    restart: always
+
+  bmn-alertmanager:
+    image: prom/alertmanager
+    ports:
+      - '127.0.0.160:9093:9093'
+    volumes:
+      - ./.docker/alertmanager/:/etc/alertmanager/
+    networks:
+      - bmn-ms-network
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+
+  bmn-mysql:
+    privileged: true
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      - '127.0.0.160:3367:3306'
+    volumes:
+      - .docker/mysql/init:/docker-entrypoint-initdb.d
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+      timeout: 20s
+      retries: 10
+    networks:
+      - bmn-ms-network
+
+
+volumes:
+  rabbitmq-data:
+  persist-elasticsearch:
+  persist-grafana:
+  persist-prometheus:
+  persist-mysql:
+
+networks:
+  bmn-ms-network:
+    external: true
